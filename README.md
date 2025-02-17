@@ -24,45 +24,9 @@ This MCP server enables Claude to interact with Okta's user management system, c
 
 ### 3. Initial Project Setup
 
-Create a new directory for your project:
-```bash
-mkdir okta-mcp
-cd okta-mcp
-```
-
-Initialize a new npm project:
-```bash
-npm init -y
-```
-
 Install dependencies:
 ```bash
-npm install @modelcontextprotocol/sdk @okta/okta-sdk-nodejs zod
-npm install -D @types/node typescript
-```
-
-Create a `tsconfig.json` file:
-```json
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "Node16",
-    "moduleResolution": "Node16",
-    "outDir": "./build",
-    "rootDir": "./src",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
-  },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules"]
-}
-```
-
-Create your source directory and add the server implementation:
-```bash
-mkdir src
+npm install
 ```
 
 ### 4. Configure Environment Variables
@@ -241,3 +205,5 @@ If you encounter any issues:
 - Review Claude Desktop logs
 - Examine the server's error output
 - Check Okta's developer documentation
+
+Note: PRs welcome! 
