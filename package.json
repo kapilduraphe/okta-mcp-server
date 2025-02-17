@@ -1,0 +1,31 @@
+{
+  "name": "okta-mcp-server",
+  "version": "1.0.0",
+  "description": "An MCP server for using Okta APIs",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "mcp-server-okta": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && node -e \"require('fs').chmodSync('dist/index.js', '755')\"",
+     "prepare": "npm run build",
+    "watch": "tsc --watch"
+  },
+  
+  "dependencies": {
+    "@okta/okta-sdk-nodejs": "^7.0.1",
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "dotenv": "^16.4.1",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "prettier": "^3.2.4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  }
+}
