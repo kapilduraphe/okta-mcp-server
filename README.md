@@ -1,6 +1,6 @@
 # Okta MCP Server
 
-This MCP server enables Claude to interact with Okta's user management system, currently providing user information retrieval capabilities.
+This MCP server enables Claude to interact with Okta's user management system, providing user and group management capabilities.
 
 ## Prerequisites
 
@@ -29,15 +29,7 @@ Install dependencies:
 npm install
 ```
 
-### 4. Configure Environment Variables
-
-Create a `.env` file for local development (don't commit this file):
-```
-OKTA_ORG_URL=https://your-domain.okta.com
-OKTA_API_TOKEN=your-api-token
-```
-
-### 5. Configure Claude Desktop
+### 4. Configure Claude Desktop
 
 Open your Claude Desktop configuration file:
 
@@ -58,7 +50,7 @@ Add or update the configuration:
         "okta": {
             "command": "node",
             "args": [
-                "/ABSOLUTE/PATH/TO/YOUR/build/index.js"
+                "PATH_TO_PROJECT_DIRECTORY/dist/index.js"
             ],
             "env": {
                 "OKTA_ORG_URL": "https://your-domain.okta.com",
@@ -73,7 +65,7 @@ Save the file and restart Claude Desktop.
 
 ## Available Tools
 
-The server currently provides the following tool:
+The server provides the following tools:
 
 ### get_user
 Retrieves detailed user information from Okta, including:
@@ -85,18 +77,36 @@ Retrieves detailed user information from Okta, including:
 - Address
 - Preferences
 
+### list_users
+Lists users from Okta with optional filtering and pagination:
+- Supports SCIM filter expressions (e.g., 'profile.firstName eq "John"')
+- Free-form text search across multiple fields
+- Sorting options (by status, creation date, etc.)
+- Pagination support with customizable limits
+
+### list_groups
+Lists user groups from Okta with optional filtering and pagination:
+- Filter expressions for groups (e.g., 'type eq "OKTA_GROUP"')
+- Free-form text search across group fields
+- Sorting options (by name, type, etc.)
+- Pagination support with customizable limits
+
 ## Example Usage in Claude
 
 After setup, you can use commands like:
 
-- "Show me details for user example@domain.com"
+- "Show me details for user with userId XXXX"
 - "What's the status of user john.doe@company.com"
 - "When was the last login for user jane.smith@organization.com"
+- "List all users in the marketing department"
+- "Find users created in the last month"
+- "Show me all the groups in my Okta organization"
+- "List groups containing the word 'admin'"
 
 ## Error Handling
 
 The server includes robust error handling for:
-- User not found (404 errors)
+- User or group not found (404 errors)
 - API authentication issues
 - Missing or invalid user profiles
 - General API errors
@@ -152,7 +162,7 @@ If you're getting environment variable errors, verify:
 
 ## Types
 
-The server includes TypeScript interfaces for Okta user data:
+The server includes TypeScript interfaces for Okta user and group data:
 
 ```typescript
 interface OktaUserProfile {
@@ -192,6 +202,19 @@ interface OktaUser {
   passwordChanged: string;
   profile: OktaUserProfile;
 }
+
+interface OktaGroup {
+  id: string;
+  created: string;
+  lastUpdated: string;
+  lastMembershipUpdated: string;
+  type: string;
+  objectClass: string[];
+  profile: {
+    name: string;
+    description: string;
+  };
+}
 ```
 
 ## License
@@ -206,4 +229,4 @@ If you encounter any issues:
 - Examine the server's error output
 - Check Okta's developer documentation
 
-Note: PRs welcome! 
+Note: PRs welcome!
