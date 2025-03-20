@@ -11,7 +11,7 @@ import pkg from "@okta/okta-sdk-nodejs";
 const { Client: OktaClient } = pkg;
 import { z } from "zod";
 
-// Initiatilize the server
+// Initialize the server
 const server = new Server(
   {
     name: "okta-mcp-server",
@@ -24,14 +24,32 @@ const server = new Server(
   }
 );
 
+// Schema definitions for input validation
 const schemas = {
   toolInputs: {
     getUser: z.object({
       userId: z.string().min(1, "User ID is required"),
     }),
+    listUsers: z.object({
+      limit: z.number().min(1).max(200).optional().default(50),
+      filter: z.string().optional(),
+      search: z.string().optional(),
+      after: z.string().optional(),
+      sortBy: z.string().optional(),
+      sortOrder: z.enum(["asc", "desc"]).optional().default("asc"),
+    }),
+    listGroups: z.object({
+      limit: z.number().min(1).max(200).optional().default(50),
+      filter: z.string().optional(),
+      search: z.string().optional(),
+      after: z.string().optional(),
+      sortBy: z.string().optional(),
+      sortOrder: z.enum(["asc", "desc"]).optional().default("asc"),
+    }),
   },
 };
 
+// Interface definitions for Okta data structures
 interface OktaUserProfile {
   login: string;
   email: string;
@@ -70,6 +88,43 @@ interface OktaUser {
   profile: OktaUserProfile;
 }
 
+interface OktaGroupProfile {
+  name: string;
+  description?: string;
+}
+
+interface OktaGroup {
+  id: string;
+  created?: string;
+  lastUpdated?: string;
+  lastMembershipUpdated?: string;
+  type?: string;
+  objectClass?: string[];
+  profile?: OktaGroupProfile;
+}
+
+function getOktaClient() {
+  const oktaDomain = process.env.OKTA_ORG_URL;
+  const apiToken = process.env.OKTA_API_TOKEN;
+
+  if (!oktaDomain) {
+    throw new Error(
+      "OKTA_ORG_URL environment variable is not set. Please set it to your Okta domain."
+    );
+  }
+
+  if (!apiToken) {
+    throw new Error(
+      "OKTA_API_TOKEN environment variable is not set. Please generate an API token in the Okta Admin Console."
+    );
+  }
+
+  return new OktaClient({
+    orgUrl: oktaDomain,
+    token: apiToken,
+  });
+}
+
 // Tool definitions
 const TOOL_DEFINITIONS = [
   {
@@ -87,6 +142,80 @@ const TOOL_DEFINITIONS = [
       required: ["userId"],
     },
   },
+  {
+    name: "list_users",
+    description: "List users from Okta with optional filtering and pagination",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: {
+          type: "number",
+          description:
+            "Maximum number of users to return (default: 50, max: 200)",
+        },
+        filter: {
+          type: "string",
+          description:
+            "SCIM filter expression to filter users (e.g. 'profile.firstName eq \"John\"')",
+        },
+        search: {
+          type: "string",
+          description: "Free-form text search across multiple fields",
+        },
+        after: {
+          type: "string",
+          description: "Cursor for pagination, obtained from previous response",
+        },
+        sortBy: {
+          type: "string",
+          description:
+            "Field to sort results by (e.g. 'status', 'created', 'lastUpdated')",
+        },
+        sortOrder: {
+          type: "string",
+          description: "Sort order (asc or desc, default: asc)",
+          enum: ["asc", "desc"],
+        },
+      },
+    },
+  },
+  {
+    name: "list_groups",
+    description:
+      "List user groups from Okta with optional filtering and pagination",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: {
+          type: "number",
+          description:
+            "Maximum number of groups to return (default: 50, max: 200)",
+        },
+        filter: {
+          type: "string",
+          description:
+            "Filter expression for groups (e.g. 'type eq \"OKTA_GROUP\"')",
+        },
+        search: {
+          type: "string",
+          description: "Free-form text search across group fields",
+        },
+        after: {
+          type: "string",
+          description: "Cursor for pagination, obtained from previous response",
+        },
+        sortBy: {
+          type: "string",
+          description: "Field to sort results by (e.g. 'name', 'type')",
+        },
+        sortOrder: {
+          type: "string",
+          description: "Sort order (asc or desc, default: asc)",
+          enum: ["asc", "desc"],
+        },
+      },
+    },
+  },
 ];
 
 // Types
@@ -100,8 +229,28 @@ type ToolHandler = (args: unknown) => Promise<{
 }>;
 
 // Utility functions
-function isOktaApiError(error: unknown): error is OktaApiError {
+function isOktaApiError(error: any): error is OktaApiError {
   return error !== null && typeof error === "object" && "status" in error;
+}
+
+function getProfileValue(value: string | undefined | null): string {
+  return value ?? "N/A";
+}
+
+function formatDate(dateString: Date | string | undefined | null): string {
+  if (!dateString) return "N/A";
+  try {
+    return new Date(dateString).toLocaleString();
+  } catch (e) {
+    return dateString instanceof Date
+      ? dateString.toISOString()
+      : dateString || "N/A";
+  }
+}
+
+function formatArray(arr: string[] | undefined | null): string {
+  if (!arr || arr.length === 0) return "N/A";
+  return arr.join(", ");
 }
 
 // Tool handlers
@@ -110,23 +259,17 @@ const toolHandlers: Record<string, ToolHandler> = {
     const { userId } = schemas.toolInputs.getUser.parse(args);
 
     try {
-      const oktaClient = new OktaClient({
-        orgUrl: process.env.OKTA_ORG_URL,
-        token: process.env.OKTA_API_TOKEN,
-      });
-
       const params: UserApiGetUserRequest = {
         userId,
       };
+
+      const oktaClient = getOktaClient();
 
       const user = await oktaClient.userApi.getUser(params);
 
       if (!user.profile) {
         throw new Error("User profile is undefined");
       }
-
-      const getProfileValue = (value: string | undefined | null): string =>
-        value ?? "N/A";
 
       const formattedUser = `• User Details:
             ID: ${user.id}
@@ -181,7 +324,7 @@ const toolHandlers: Record<string, ToolHandler> = {
           },
         ],
       };
-    } catch (error: unknown) {
+    } catch (error) {
       if (isOktaApiError(error) && error.status === 404) {
         return {
           content: [
@@ -193,14 +336,202 @@ const toolHandlers: Record<string, ToolHandler> = {
         };
       }
       console.error("Error fetching user:", error);
-      throw new Error("Failed to fetch user details");
+      throw new Error(
+        `Failed to fetch user details: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   },
-};
+
+  list_users: async (args: unknown) => {
+    const params = schemas.toolInputs.listUsers.parse(args);
+
+    try {
+      // Build query parameters
+      const queryParams: Record<string, any> = {};
+      if (params.limit) queryParams.limit = params.limit;
+      if (params.after) queryParams.after = params.after;
+      if (params.filter) queryParams.filter = params.filter;
+      if (params.search) queryParams.search = params.search;
+      if (params.sortBy) queryParams.sortBy = params.sortBy;
+      if (params.sortOrder) queryParams.sortOrder = params.sortOrder;
+
+      const oktaClient = getOktaClient();
+
+      // Get users list
+      const users = await oktaClient.userApi.listUsers(queryParams);
+
+      if (!users) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "No users data was returned from Okta.",
+            },
+          ],
+        };
+      }
+
+      // Format the response
+      let formattedResponse = "Users:\n";
+      let count = 0;
+
+      // Track pagination info
+      let after: string | undefined;
+
+      // Process the users collection
+      for await (const user of users) {
+        // Check if user is valid
+        if (!user || !user.id) {
+          continue;
+        }
+
+        count++;
+
+        // Remember the last user ID for pagination
+        after = user.id;
+
+        formattedResponse += `
+  ${count}. ${user.profile?.firstName || ""} ${user.profile?.lastName || ""} (${user.profile?.email || "No email"})
+   - ID: ${user.id}
+   - Status: ${user.status || "Unknown"}
+   - Created: ${formatDate(user.created)}
+   - Last Updated: ${formatDate(user.lastUpdated)}
+  `;
+      }
+
+      if (count === 0) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "No users found matching your criteria.",
+            },
+          ],
+        };
+      }
+
+      // Add pagination information
+      if (after && count >= (params.limit || 50)) {
+        formattedResponse += `\nPagination:\n- Total users shown: ${count}\n`;
+        formattedResponse += `- For next page, use 'after' parameter with value: ${after}\n`;
+      } else {
+        formattedResponse += `\nTotal users: ${count}\n`;
+      }
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: formattedResponse,
+          },
+        ],
+      };
+    } catch (error) {
+      console.error("Error listing users:", error);
+      throw new Error(
+        `Failed to list users: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  },
+
+  list_groups: async (args: unknown) => {
+    const params = schemas.toolInputs.listGroups.parse(args);
+
+    try {
+      // Build query parameters
+      const queryParams: Record<string, any> = {};
+      if (params.limit) queryParams.limit = params.limit;
+      if (params.after) queryParams.after = params.after;
+      if (params.filter) queryParams.filter = params.filter;
+      if (params.search) queryParams.search = params.search;
+      if (params.sortBy) queryParams.sortBy = params.sortBy;
+      if (params.sortOrder) queryParams.sortOrder = params.sortOrder;
+
+      const oktaClient = getOktaClient();
+
+      // Get groups list
+      const groups = await oktaClient.groupApi.listGroups(queryParams);
+
+      if (!groups) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "No groups data was returned from Okta.",
+            },
+          ],
+        };
+      }
+
+      // Format the response
+      let formattedResponse = "Groups:\n";
+      let count = 0;
+
+      // Track pagination info
+      let after: string | undefined;
+
+      // Process the groups collection
+      for await (const group of groups) {
+        // Check if group is valid
+        if (!group || !group.id) {
+          continue;
+        }
+
+        count++;
+
+        // Remember the last group ID for pagination
+        after = group.id;
+
+        formattedResponse += `
+  ${count}. ${group.profile?.name || "Unnamed Group"}
+     - ID: ${group.id}
+     - Type: ${group.type || "Unknown"}
+     - Object Class: ${formatArray(group.objectClass)}
+     - Description: ${group.profile?.description || "No description"}
+     - Created: ${formatDate(group.created)}
+     - Last Updated: ${formatDate(group.lastUpdated)}
+     - Last Membership Updated: ${formatDate(group.lastMembershipUpdated)}
+  `;
+      }
+
+      if (count === 0) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "No groups found matching your criteria.",
+            },
+          ],
+        };
+      }
+
+      // Add pagination information
+      if (after && count >= (params.limit || 50)) {
+        formattedResponse += `\nPagination:\n- Total groups shown: ${count}\n`;
+        formattedResponse += `- For next page, use 'after' parameter with value: ${after}\n`;
+      } else {
+        formattedResponse += `\nTotal groups: ${count}\n`;
+      }
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: formattedResponse,
+          },
+        ],
+      };
+    } catch (error) {
+      console.error("Error listing groups:", error);
+      throw new Error(
+        `Failed to list groups: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  },
+}; // Added closing brace for toolHandlers object
 
 // Register tool handlers
 server.setRequestHandler(ListToolsRequestSchema, async () => {
-  console.error("Tools requested by client");
   return { tools: TOOL_DEFINITIONS };
 });
 
@@ -216,42 +547,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     return await handler(args);
   } catch (error) {
     console.error(`Error executing tool ${name}:`, error);
-    throw error;
+    throw new Error(
+      `Error executing tool ${name}: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 });
 
 // Start the server
 async function main() {
   try {
-    // Check for required environment variables
-    const requiredEnvVars: string[] = [];
-
-    const missingVars = requiredEnvVars.filter(
-      (varName) => !process.env[varName]
-    );
-    if (missingVars.length > 0) {
-      console.error(
-        `Missing required environment variables: ${missingVars.join(", ")}`
-      );
-      process.exit(1);
-    }
-
-    console.error("Starting server with env vars:", {});
-
     const transport = new StdioServerTransport();
-    console.error("Created transport");
-
     await server.connect(transport);
-    console.error("Connected to transport");
-
-    console.error("Okta MCP Server running on stdio");
   } catch (error) {
-    console.error("Startup error:", error);
+    console.error(
+      "Startup error:",
+      error instanceof Error ? error.message : String(error)
+    );
     process.exit(1);
   }
 }
 
 main().catch((error) => {
-  console.error("Fatal error in main():", error);
+  console.error(
+    "Fatal error in main():",
+    error instanceof Error ? error.message : String(error)
+  );
   process.exit(1);
 });

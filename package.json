@@ -11,8 +11,9 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc && node -e \"require('fs').chmodSync('dist/index.js', '755')\"",
-     "prepare": "npm run build",
+    "clean": "rm -rf dist",
+    "build": "npm run clean && tsc && chmod 755 ./dist/index.js",
+    "prepare": "npm run build",
     "watch": "tsc --watch"
   },
   
