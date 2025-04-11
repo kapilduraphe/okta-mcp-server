@@ -30,6 +30,9 @@ const schemas = {
     getUser: z.object({
       userId: z.string().min(1, "User ID is required"),
     }),
+    getUserLastLocation: z.object({
+      userId: z.string().min(1, "User ID is required"),
+    }),
     listUsers: z.object({
       limit: z.number().min(1).max(200).optional().default(50),
       filter: z.string().optional(),
@@ -131,6 +134,20 @@ const TOOL_DEFINITIONS = [
     name: "get_user",
     description:
       "Retrieve detailed user information from Okta by user ID, including profile, account status, dates, employment details, and contact information",
+    inputSchema: {
+      type: "object",
+      properties: {
+        userId: {
+          type: "string",
+          description: "The unique identifier of the Okta user",
+        },
+      },
+      required: ["userId"],
+    },
+  },
+  {
+    name: "get_user_last_location",
+    description: "Retrieve the last known location and login information for a user from Okta system logs",
     inputSchema: {
       type: "object",
       properties: {
@@ -338,6 +355,81 @@ const toolHandlers: Record<string, ToolHandler> = {
       console.error("Error fetching user:", error);
       throw new Error(
         `Failed to fetch user details: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  },
+
+  get_user_last_location: async (args: unknown) => {
+    const { userId } = schemas.toolInputs.getUserLastLocation.parse(args);
+
+    try {
+      const oktaClient = getOktaClient();
+
+      // First get the user to ensure they exist and get their login
+      const user = await oktaClient.userApi.getUser({ userId });
+
+      if (!user || !user.profile) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `User with ID ${userId} not found.`,
+            },
+          ],
+        };
+      }
+
+      // Get the last 90 days of system logs for this user's login events
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+      // Use the system log API to get login events with the previously working filter syntax
+      const logs = await oktaClient.systemLogApi.listLogEvents({
+        since: ninetyDaysAgo,
+        filter: `target.id eq "${userId}" and (eventType eq "user.session.start" or eventType eq "user.authentication.auth_via_mfa" or eventType eq "user.authentication.sso")`,
+        limit: 1
+      });
+
+      // Get the first (most recent) log entry
+      const lastLogin = await logs.next();
+
+      if (!lastLogin || !lastLogin.value) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `No login events found for user ${user.profile.login} in the last 90 days. This might mean the user hasn't logged in recently or the events are not being captured in the system logs.`,
+            },
+          ],
+        };
+      }
+
+      const event = lastLogin.value;
+      const clientData = event.client || {};
+      const geographicalContext = event.client?.geographicalContext || {};
+
+      const formattedLocation = `• Last Login Information for User ${user.profile.login}:
+            Time: ${formatDate(event.published)}
+            Event Type: ${event.eventType || "N/A"}
+            IP Address: ${clientData.ipAddress || "N/A"}
+            City: ${geographicalContext.city || "N/A"}
+            State: ${geographicalContext.state || "N/A"}
+            Country: ${geographicalContext.country || "N/A"}
+            Device: ${clientData.device || "N/A"}
+            User Agent: ${clientData.userAgent || "N/A"}`;
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: formattedLocation,
+          },
+        ],
+      };
+    } catch (error) {
+      console.error("Error fetching user location:", error);
+      throw new Error(
+        `Failed to fetch user location: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   },
