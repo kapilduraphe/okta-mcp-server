@@ -2,6 +2,10 @@
 
 This MCP server enables Claude to interact with Okta's user management system, providing user and group management capabilities.
 
+<a href="https://glama.ai/mcp/servers/@kapilduraphe/okta-mcp-server">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@kapilduraphe/okta-mcp-server/badge" alt="Okta Server MCP server" />
+</a>
+
 ## Prerequisites
 
 - Node.js (v16 or higher)
