@@ -249,7 +249,8 @@ export const userTools = [
   },
   {
     name: "get_user_last_location",
-    description: "Retrieve the last known location and login information for a user from Okta system logs",
+    description:
+      "Retrieve the last known location and login information for a user from Okta system logs",
     inputSchema: {
       type: "object",
       properties: {
@@ -260,7 +261,7 @@ export const userTools = [
       },
       required: ["userId"],
     },
-  }
+  },
 ];
 
 // Handlers for user-related tools
