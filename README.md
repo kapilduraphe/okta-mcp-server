@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/kapilduraphe-okta-mcp-server-badge.png)](https://mseep.ai/app/kapilduraphe-okta-mcp-server)
+
 # Okta MCP Server
 
 This MCP server enables Claude to interact with Okta's user management system, providing comprehensive user and group management capabilities along with onboarding automation.
