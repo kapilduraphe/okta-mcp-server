@@ -681,7 +681,7 @@ Created: ${formatDate(user.created)}`,
 
       // Use the system log API to get login events
       const logs = await oktaClient.systemLogApi.listLogEvents({
-        since: ninetyDaysAgo,
+        since: ninetyDaysAgo.toISOString(),
         filter: `target.id eq "${userId}" and (eventType eq "user.session.start" or eventType eq "user.authentication.auth_via_mfa" or eventType eq "user.authentication.sso")`,
         limit: 1,
       });
