@@ -307,6 +307,8 @@ export const userHandlers = {
   Employee Number: ${user.profile.employeeNumber}
   User Type: ${user.profile.userType}
   Cost Center: ${user.profile.costCenter}
+  Manager: ${getProfileValue(user.profile.manager)}
+  ManagerId ${getProfileValue(user.profile.managerId)}
 
 - Contact Information:
   Mobile Phone: ${getProfileValue(user.profile.mobilePhone)}
