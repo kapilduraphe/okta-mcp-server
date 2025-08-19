@@ -8,6 +8,14 @@ const userSchemas = {
     userId: z.string().min(1, "User ID is required"),
   }),
 
+  getUserByAttribute: z.object({
+    attribute: z.string().min(1, "Attribute name is required"),
+    value: z.string().min(1, "Value is required"),
+    operator: z.enum(["eq", "sw", "ew", "co", "pr"]).optional().default("eq"),
+    limit: z.number().min(1).max(200).optional().default(50),
+    includeInactive: z.boolean().optional().default(false),
+  }),
+
   listUsers: z.object({
     limit: z.number().min(1).max(200).optional().default(50),
     filter: z.string().optional(),
@@ -51,7 +59,7 @@ const userSchemas = {
   }),
 };
 
-// Utility function to get Okta client (can be moved to a shared utility file)
+// Utility function to get Okta client
 function getOktaClient() {
   const oktaDomain = process.env.OKTA_ORG_URL;
   const apiToken = process.env.OKTA_API_TOKEN;
@@ -91,6 +99,37 @@ function formatDate(dateString: Date | string | undefined | null): string {
   }
 }
 
+// Utility functions to handle PII safely
+function isPIIAttribute(attribute: string): boolean {
+  const piiAttributes = [
+    "email",
+    "login",
+    "firstName",
+    "lastName",
+    "displayName",
+    "nickName",
+    "mobilePhone",
+    "primaryPhone",
+    "streetAddress",
+    "secondEmail",
+    "employeeNumber",
+    "manager",
+    "managerId",
+  ];
+  return piiAttributes.includes(attribute.toLowerCase());
+}
+
+function maskValue(value: string): string {
+  if (value.length <= 3) {
+    return "***";
+  }
+  return (
+    value.charAt(0) +
+    "*".repeat(value.length - 2) +
+    value.charAt(value.length - 1)
+  );
+}
+
 // Tool definitions for users
 export const userTools = [
   {
@@ -107,6 +146,41 @@ export const userTools = [
       required: ["userId"],
     },
   },
+  {
+    name: "find_users_by_attribute",
+    description:
+      "Search users by any profile attribute (manager, department, title, firstName, etc.)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        attribute: {
+          type: "string",
+          description:
+            "Profile attribute to search by. Common attributes: firstName, lastName, email, manager, department, title, division, organization, employeeNumber, costCenter, userType, city, state",
+        },
+        value: {
+          type: "string",
+          description: "Value to search for",
+        },
+        operator: {
+          type: "string",
+          description:
+            "How to match the value: 'eq' (exact), 'sw' (starts with), 'ew' (ends with), 'co' (contains), 'pr' (has any value - ignores 'value' param)",
+          enum: ["eq", "sw", "ew", "co", "pr"],
+        },
+        limit: {
+          type: "number",
+          description: "Maximum users to return (default: 50, max: 200)",
+        },
+        includeInactive: {
+          type: "boolean",
+          description: "Include suspended/deactivated users (default: false)",
+        },
+      },
+      required: ["attribute", "value"],
+    },
+  },
+
   {
     name: "list_users",
     description: "List users from Okta with optional filtering and pagination",
@@ -655,6 +729,240 @@ Created: ${formatDate(user.created)}`,
       };
     }
   },
+
+  find_users_by_attribute: async (request: { parameters: unknown }) => {
+    const { attribute, value, operator, limit, includeInactive } =
+      userSchemas.getUserByAttribute.parse(request.parameters);
+
+    try {
+      const oktaClient = getOktaClient();
+
+      // Strategy 1: Try formatted search query first (much faster and more accurate)
+      let users;
+      let searchMethod = "";
+
+      try {
+        // Construct proper search query based on attribute and operator
+        let searchQuery;
+
+        if (operator === "pr") {
+          searchQuery = `profile.${attribute} pr`;
+        } else {
+          searchQuery = `profile.${attribute} ${operator} "${value}"`;
+        }
+
+        const searchParams = {
+          search: searchQuery,
+          limit: limit || 50,
+        };
+
+        users = await oktaClient.userApi.listUsers(searchParams);
+        searchMethod = "formatted search";
+      } catch (searchError) {
+        // Check if it's an unsupported operator error
+        const errorMessage =
+          searchError instanceof Error
+            ? searchError.message
+            : String(searchError);
+
+        if (errorMessage.includes("operator is not supported")) {
+          // Strategy 2: Try free-text search (works for some attributes)
+          try {
+            const freeTextParams = {
+              search: value,
+              limit: limit || 50,
+            };
+
+            users = await oktaClient.userApi.listUsers(freeTextParams);
+            searchMethod = "free-text search";
+          } catch (freeTextError) {
+            // Strategy 3: Fall back to client-side filtering
+            const basicParams = {
+              limit: 200,
+            };
+
+            users = await oktaClient.userApi.listUsers(basicParams);
+            searchMethod = "client-side filtering (limited to 200 users)";
+          }
+        } else {
+          // For other errors, go straight to client-side filtering
+          const basicParams = {
+            limit: 200,
+          };
+
+          users = await oktaClient.userApi.listUsers(basicParams);
+          searchMethod = "client-side filtering (limited to 200 users)";
+        }
+      }
+
+      if (!users) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "No users data returned from Okta.",
+            },
+          ],
+        };
+      }
+
+      // Collect users and apply filtering
+      const candidateUsers: any[] = [];
+      for await (const user of users) {
+        if (!user?.id) continue;
+        candidateUsers.push(user);
+      }
+
+      // Apply filtering based on search method
+      const matchingUsers: any[] = [];
+
+      if (searchMethod === "formatted search") {
+        // For formatted search, the results should already be filtered by Okta
+        // We just need to apply status filtering and get full user details
+        for (const user of candidateUsers) {
+          try {
+            const fullUser = await oktaClient.userApi.getUser({
+              userId: user.id,
+            });
+
+            if (!fullUser?.profile) continue;
+
+            // Apply status filter
+            if (!includeInactive && fullUser.status !== "ACTIVE") continue;
+
+            matchingUsers.push(fullUser);
+          } catch (userError) {
+            // Silent error handling - just skip this user
+            continue;
+          }
+        }
+      } else {
+        // For free-text search and client-side filtering, we need to verify the attribute match
+        for (const user of candidateUsers) {
+          try {
+            const fullUser = await oktaClient.userApi.getUser({
+              userId: user.id,
+            });
+
+            if (!fullUser?.profile) continue;
+
+            // Apply status filter
+            if (!includeInactive && fullUser.status !== "ACTIVE") continue;
+
+            // Check if this user actually matches our specific attribute
+            const attributeValue =
+              fullUser.profile[attribute as keyof typeof fullUser.profile];
+
+            // Handle 'pr' operator (present/exists)
+            if (operator === "pr") {
+              if (
+                attributeValue !== undefined &&
+                attributeValue !== null &&
+                attributeValue !== ""
+              ) {
+                matchingUsers.push(fullUser);
+              }
+              continue;
+            }
+
+            // For other operators, value must exist
+            if (attributeValue === undefined || attributeValue === null)
+              continue;
+
+            const attrValueStr = String(attributeValue).toLowerCase();
+            const searchValueStr = value.toLowerCase();
+
+            let isMatch = false;
+            switch (operator) {
+              case "eq":
+                isMatch = attrValueStr === searchValueStr;
+                break;
+              case "sw":
+                isMatch = attrValueStr.startsWith(searchValueStr);
+                break;
+              case "ew":
+                isMatch = attrValueStr.endsWith(searchValueStr);
+                break;
+              case "co":
+                isMatch = attrValueStr.includes(searchValueStr);
+                break;
+            }
+
+            if (isMatch) {
+              matchingUsers.push(fullUser);
+
+              if (matchingUsers.length >= (limit || 50)) {
+                break;
+              }
+            }
+          } catch (userError) {
+            // Silent error handling - just skip this user
+            continue;
+          }
+        }
+      }
+
+      // Build response - mask PII in search value display
+      const displayValue = isPIIAttribute(attribute) ? maskValue(value) : value;
+      let response = `Search Results for ${attribute} ${operator} "${displayValue}"\n`;
+      response += `Method: ${searchMethod}\n`;
+      response += `${includeInactive ? "Including" : "Excluding"} inactive users\n\n`;
+
+      if (matchingUsers.length === 0) {
+        response += `No users found with ${attribute} matching the specified criteria`;
+        if (searchMethod.includes("limited")) {
+          response += `\n(Note: Only checked first 200 users for performance)`;
+        }
+      } else {
+        const userList: string[] = [];
+
+        matchingUsers.forEach((user, index) => {
+          const actualValue =
+            user.profile?.[attribute as keyof typeof user.profile] || "N/A";
+
+          userList.push(`${index + 1}. ${user.profile?.firstName || ""} ${user.profile?.lastName || ""}
+   Email: ${user.profile?.email || "No email"}
+   ID: ${user.id}
+   Status: ${user.status}
+   ${attribute}: ${actualValue}
+   Department: ${user.profile?.department || "N/A"}
+   Title: ${user.profile?.title || "N/A"}
+   Last Login: ${formatDate(user.lastLogin)}`);
+        });
+
+        response += userList.join("\n\n");
+        response += `\n\nTotal found: ${matchingUsers.length} user${matchingUsers.length !== 1 ? "s" : ""}`;
+
+        // Add helpful note about search capabilities
+        if (searchMethod === "formatted search") {
+          response += `\n\n✅ Note: This search used Okta's native filtering for optimal performance.`;
+        } else if (searchMethod.includes("limited")) {
+          response += `\n\n⚠️ Note: This search was limited to 200 users for performance. For comprehensive results across all users, consider using more specific search criteria.`;
+        }
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: response,
+          },
+        ],
+      };
+    } catch (error) {
+      console.error("[ERROR] Search failed:", error);
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Search failed: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  },
+
   get_user_last_location: async (request: { parameters: unknown }) => {
     const { userId } = userSchemas.getUserLastLocation.parse(
       request.parameters
