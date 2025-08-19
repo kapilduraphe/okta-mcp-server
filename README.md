@@ -85,6 +85,22 @@ Retrieves detailed user information from Okta, including:
 - Address
 - Preferences
 
+#### find_users_by_attribute
+Search users by any profile attribute with advanced filtering:
+- **Supported attributes**: firstName, lastName, email, manager, department, title, division, organization, employeeNumber, costCenter, userType, city, state
+- **Search operators**:
+  - `eq` (exact match) - Works for all attributes
+  - `sw` (starts with) - Works for all attributes
+  - `ew` (ends with) - Works for most attributes
+  - `co` (contains) - Works for some attributes (firstName, lastName, email)
+  - `pr` (present/exists) - Works for all attributes (finds users with any value for that attribute)
+- **Features**:
+  - Uses Okta's native search for optimal performance
+  - Automatic fallback to client-side filtering for unsupported operators
+  - PII masking in search results for sensitive attributes
+  - Status filtering (include/exclude inactive users)
+  - Pagination support with customizable limits
+
 #### list_users
 Lists users from Okta with optional filtering and pagination:
 - Supports SCIM filter expressions (e.g., 'profile.firstName eq "John"')
@@ -171,14 +187,24 @@ After setup, you can use commands like:
 
 ### User Management
 - "Show me details for user with userId XXXX"
+- "Find all users in the engineering department"
+- "Search for users with first name starting with 'John'"
+- "Find users whose email contains 'gmail'"
+- "Show me all users who have a department assigned"
+- "List users whose title is 'Manager'"
 - "What's the status of user john.doe@company.com"
 - "When was the last login for user jane.smith@organization.com"
-- "List all users in the marketing department"
 - "Find users created in the last month"
 - "Activate user with ID XXXX"
 - "Suspend user with ID XXXX"
 - "Delete deactivated user with ID XXXX"
 - "Where did user XXXX last log in from?"
+
+### Advanced User Searches
+- "Find all users in the Sales department" → Uses `find_users_by_attribute` with `department eq "Sales"`
+- "Show me users whose email starts with 'admin'" → Uses `email sw "admin"`
+- "Find users with any manager assigned" → Uses `manager pr`
+- "List users whose last name contains 'smith'" → Uses `lastName co "smith"`
 
 ### Group Management
 - "Show me all groups in my Okta organization"
@@ -206,6 +232,7 @@ The server includes robust error handling for:
 - CSV parsing issues
 - User attribute mapping failures
 - Application provisioning errors
+- Unsupported search operators (automatic fallback to alternative methods)
 
 ## Troubleshooting
 
@@ -225,6 +252,11 @@ The server includes robust error handling for:
 - Check if the server built successfully
 - Verify file permissions on build/index.js (should be 755)
 - Try running the server directly: `node /path/to/build/index.js`
+
+**Search Issues:**
+- Some search operators are not supported for all attributes (e.g., `contains` doesn't work for `department`)
+- The server automatically falls back to alternative search methods when needed
+- Check the response message for which search method was used
 
 ### Viewing Logs
 
@@ -255,6 +287,23 @@ If you're getting environment variable errors, verify:
 - Monitor API usage in Okta Admin Console
 - Implement rate limiting for API calls
 - Use minimum required permissions for API token
+- PII masking is enabled for sensitive search parameters
+
+## Search Operator Compatibility
+
+Different Okta attributes support different search operators:
+
+| Attribute Type | eq | sw | ew | co | pr |
+|----------------|----|----|----|----|----| 
+| firstName, lastName | ✅ | ✅ | ✅ | ✅ | ✅ |
+| email, login | ✅ | ✅ | ✅ | ✅ | ✅ |
+| department, title | ✅ | ✅ | ❌ | ❌* | ✅ |
+| division, organization | ✅ | ✅ | ❌ | ❌* | ✅ |
+| All attributes | ✅ | ✅ | ⚠️ | ⚠️ | ✅ |
+
+*❌ = Not supported, ⚠️ = May not be supported for all attributes
+
+> **Note:** When an operator is not supported, the server automatically falls back to client-side filtering for compatibility.
 
 ## Types
 
