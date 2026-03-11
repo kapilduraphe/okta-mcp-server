@@ -145,6 +145,11 @@ export const userTools = [
       },
       required: ["userId"],
     },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false,
+    },
   },
   {
     name: "find_users_by_attribute",
@@ -179,6 +184,11 @@ export const userTools = [
       },
       required: ["attribute", "value"],
     },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false,
+    },
   },
 
   {
@@ -206,7 +216,8 @@ export const userTools = [
         },
         sortBy: {
           type: "string",
-          description: "Field to sort results by",
+          description:
+            "Field to sort results by. Supported values: 'status', 'lastUpdated', 'created'. Only works when 'search' parameter is also specified.",
         },
         sortOrder: {
           type: "string",
@@ -214,6 +225,11 @@ export const userTools = [
           enum: ["asc", "desc"],
         },
       },
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false,
     },
   },
   {
@@ -246,6 +262,12 @@ export const userTools = [
       },
       required: ["firstName", "lastName", "email"],
     },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
   },
   {
     name: "activate_user",
@@ -264,6 +286,12 @@ export const userTools = [
       },
       required: ["userId"],
     },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
   },
   {
     name: "suspend_user",
@@ -277,6 +305,12 @@ export const userTools = [
         },
       },
       required: ["userId"],
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
     },
   },
   {
@@ -292,6 +326,12 @@ export const userTools = [
       },
       required: ["userId"],
     },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
   },
   {
     name: "deactivate_user",
@@ -305,6 +345,12 @@ export const userTools = [
         },
       },
       required: ["userId"],
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
     },
   },
   {
@@ -320,6 +366,12 @@ export const userTools = [
       },
       required: ["userId"],
     },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
   },
   {
     name: "get_user_last_location",
@@ -334,6 +386,11 @@ export const userTools = [
         },
       },
       required: ["userId"],
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false,
     },
   },
 ];
@@ -365,38 +422,38 @@ export const userHandlers = {
   Password Changed: ${formatDate(user.passwordChanged)}
 
 - Personal Information:
-  Login: ${user.profile.login}
-  Email: ${user.profile.email}
+  Login: ${getProfileValue(user.profile.login)}
+  Email: ${getProfileValue(user.profile.email)}
   Secondary Email: ${getProfileValue(user.profile.secondEmail)}
-  First Name: ${user.profile.firstName}
-  Last Name: ${user.profile.lastName}
-  Display Name: ${user.profile.displayName}
+  First Name: ${getProfileValue(user.profile.firstName)}
+  Last Name: ${getProfileValue(user.profile.lastName)}
+  Display Name: ${getProfileValue(user.profile.displayName)}
   Nickname: ${getProfileValue(user.profile.nickName)}
 
 - Employment Details:
-  Organization: ${user.profile.organization}
-  Title: ${user.profile.title}
-  Division: ${user.profile.division}
-  Department: ${user.profile.department}
-  Employee Number: ${user.profile.employeeNumber}
-  User Type: ${user.profile.userType}
-  Cost Center: ${user.profile.costCenter}
+  Organization: ${getProfileValue(user.profile.organization)}
+  Title: ${getProfileValue(user.profile.title)}
+  Division: ${getProfileValue(user.profile.division)}
+  Department: ${getProfileValue(user.profile.department)}
+  Employee Number: ${getProfileValue(user.profile.employeeNumber)}
+  User Type: ${getProfileValue(user.profile.userType)}
+  Cost Center: ${getProfileValue(user.profile.costCenter)}
   Manager: ${getProfileValue(user.profile.manager)}
-  ManagerId ${getProfileValue(user.profile.managerId)}
+  ManagerId: ${getProfileValue(user.profile.managerId)}
 
 - Contact Information:
   Mobile Phone: ${getProfileValue(user.profile.mobilePhone)}
   Primary Phone: ${getProfileValue(user.profile.primaryPhone)}
-  
+
 - Address:
-  Street: ${user.profile.streetAddress}
-  City: ${user.profile.city}
-  State: ${user.profile.state}
-  Zip Code: ${user.profile.zipCode}
-  Country: ${user.profile.countryCode}
+  Street: ${getProfileValue(user.profile.streetAddress)}
+  City: ${getProfileValue(user.profile.city)}
+  State: ${getProfileValue(user.profile.state)}
+  Zip Code: ${getProfileValue(user.profile.zipCode)}
+  Country: ${getProfileValue(user.profile.countryCode)}
 
 - Preferences:
-  Preferred Language: ${user.profile.preferredLanguage}
+  Preferred Language: ${getProfileValue(user.profile.preferredLanguage)}
   Profile URL: ${getProfileValue(user.profile.profileUrl)}`;
 
       return {
@@ -1022,7 +1079,9 @@ Created: ${formatDate(user.created)}`,
         State: ${geographicalContext.state || "N/A"}
         Country: ${geographicalContext.country || "N/A"}
         Device: ${clientData.device || "N/A"}
-        User Agent: ${clientData.userAgent || "N/A"}`;
+        User Agent: ${clientData.userAgent?.rawUserAgent || "N/A"}
+        OS: ${clientData.userAgent?.os || "N/A"}
+        Browser: ${clientData.userAgent?.browser || "N/A"}`;
 
       return {
         content: [

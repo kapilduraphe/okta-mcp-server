@@ -117,7 +117,8 @@ export const groupTools = [
         },
         sortBy: {
           type: "string",
-          description: "Field to sort results by",
+          description:
+            "Field to sort results by. Supported values: 'lastUpdated'. Only works when 'search' parameter is also specified.",
         },
         sortOrder: {
           type: "string",
@@ -125,6 +126,11 @@ export const groupTools = [
           enum: ["asc", "desc"],
         },
       },
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false,
     },
   },
   {
@@ -144,6 +150,12 @@ export const groupTools = [
       },
       required: ["name"],
     },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
   },
   {
     name: "get_group",
@@ -158,6 +170,11 @@ export const groupTools = [
       },
       required: ["groupId"],
     },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false,
+    },
   },
   {
     name: "delete_group",
@@ -171,6 +188,12 @@ export const groupTools = [
         },
       },
       required: ["groupId"],
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
     },
   },
   {
@@ -190,6 +213,12 @@ export const groupTools = [
       },
       required: ["groupId", "userId"],
     },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
   },
   {
     name: "remove_user_from_group",
@@ -207,6 +236,12 @@ export const groupTools = [
         },
       },
       required: ["groupId", "userId"],
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
     },
   },
   {
@@ -230,6 +265,11 @@ export const groupTools = [
         },
       },
       required: ["groupId"],
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false,
     },
   },
 ];

@@ -88,6 +88,12 @@ export const onboardingTools = [
       },
       required: ["csvData"]
     },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
   },
   {
     name: "assign_users_to_groups",
@@ -106,6 +112,12 @@ export const onboardingTools = [
         }
       },
       required: ["userIds", "attributeMapping"]
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
     },
   },
   {
@@ -126,6 +138,12 @@ export const onboardingTools = [
         }
       },
       required: ["userIds", "applicationIds"]
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
     },
   },
   {
@@ -167,6 +185,12 @@ export const onboardingTools = [
         }
       },
       required: ["csvData"]
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
     },
   }
 ];
