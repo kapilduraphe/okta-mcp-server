@@ -16,18 +16,19 @@
     "prepare": "npm run build",
     "watch": "tsc --watch"
   },
-  
   "dependencies": {
-    "@okta/okta-sdk-nodejs": "^7.0.1",
-    "@modelcontextprotocol/sdk": "^1.0.4",
-    "dotenv": "^16.4.1",
-    "zod": "^3.22.4",
-    "papaparse": "^5.4.1"
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@okta/okta-sdk-nodejs": "^8.2.0",
+    "papaparse": "^5.7.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/node": "^20.11.5",
-    "prettier": "^3.2.4",
+    "@types/node": "^24.19.2",
+    "prettier": "^3.9.10",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
   }
 }
