@@ -246,9 +246,10 @@ export const onboardingHandlers = {
             }
           };
           
-          // Create the user in Okta
+          // Create the user in Okta (staged; Okta activates by default otherwise)
           const createdUser = await oktaClient.userApi.createUser({
-            body: newUser
+            body: newUser,
+            activate: false
           });
           
           // Activate if requested
