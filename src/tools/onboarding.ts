@@ -14,7 +14,7 @@ const onboardingSchemas = {
 
   assignUsersToGroups: z.object({
     userIds: z.array(z.string().min(1, "User ID is required")),
-    attributeMapping: z.record(z.record(z.string())).describe(
+    attributeMapping: z.record(z.string(), z.record(z.string(), z.string())).describe(
       "Mapping of user attributes to group IDs (e.g., {\"department\": {\"Engineering\": \"group1Id\"}})"
     ),
   }),
@@ -28,7 +28,7 @@ const onboardingSchemas = {
     csvData: z.string().min(1, "CSV data is required"),
     activateUsers: z.boolean().optional().default(true),
     defaultGroups: z.array(z.string()).optional().default([]),
-    groupMappings: z.record(z.record(z.string())).optional().default({}),
+    groupMappings: z.record(z.string(), z.record(z.string(), z.string())).optional().default({}),
     applicationIds: z.array(z.string()).optional().default([]),
     sendWelcomeEmail: z.boolean().optional().default(true),
   }),
